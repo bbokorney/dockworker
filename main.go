@@ -35,8 +35,13 @@ func initJobAPI() JobAPI {
 	if err != nil {
 		log.Fatalf("Failed to ping Docker daemon: %s", err)
 	}
+	eventListener := NewEventListener(client)
+	err = eventListener.Start()
+	if err != nil {
+		log.Fatalf("Failed to start event listener: %s", err)
+	}
 	jobStore := NewJobStore()
-	jobManager := NewJobManager(jobStore, client)
+	jobManager := NewJobManager(jobStore, client, eventListener)
 	jobManager.Start()
 	jobService := NewJobService(jobStore, jobManager)
 	return NewJobAPI(jobService)

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/fsouza/go-dockerclient"
 )
@@ -9,7 +11,7 @@ func (jm jobManager) jobWorker(job Job) {
 	log.Debugf("Running job %+v", job)
 	job.Status = Running
 	jm.updateStatus(job)
-	jr, err := newJobRunner(&job, jm.client)
+	jr, err := newJobRunner(&job, jm.client, jm.eventListner)
 	if err != nil {
 		log.Errorf("Error creating job runner: %s", err)
 		job.Status = Failed
@@ -28,6 +30,7 @@ func (jm jobManager) jobWorker(job Job) {
 
 type jobRunner struct {
 	client        *docker.Client
+	eventListener EventListener
 	eventChan     chan *docker.APIEvents
 	cmdChan       chan interface{}
 	cmdIndex      int
@@ -36,18 +39,16 @@ type jobRunner struct {
 	job           *Job
 }
 
-func newJobRunner(job *Job, client *docker.Client) (*jobRunner, error) {
+func newJobRunner(job *Job, client *docker.Client, eventListener EventListener) (*jobRunner, error) {
 	jr := &jobRunner{
-		client: client,
+		client:        client,
+		job:           job,
+		eventListener: eventListener,
 	}
-	jr.job = job
 
 	// register an event listener
 	jr.eventChan = make(chan *docker.APIEvents)
-	if err := jr.client.AddEventListener(jr.eventChan); err != nil {
-		log.Errorf("Error adding event listener: %s", err)
-		return nil, err
-	}
+	jr.eventListener.RegisterListener(jr.eventChan)
 	jr.cmdChan = make(chan interface{}, 2)
 	jr.cmdChan <- true
 	jr.cmdIndex = 0
@@ -59,21 +60,19 @@ func newJobRunner(job *Job, client *docker.Client) (*jobRunner, error) {
 }
 
 func (jr *jobRunner) runJob() error {
-	defer func() {
-		go func() {
-			// TODO: investigate
-			// this blocks forever for some reason...
-			log.Debugf("Removing event listener")
-			jr.client.RemoveEventListener(jr.eventChan)
-			log.Debugf("Event listener removed")
-		}()
-	}()
+	defer jr.cleanup()
 
 	for {
 		select {
 		// TODO: think about how to filter these events
 		// on a busy Docker daemon there could be lots of them
-		case event := <-jr.eventChan:
+		case event, ok := <-jr.eventChan:
+			if !ok {
+				// channel is closed
+				err := fmt.Errorf("Event channel closed")
+				log.Warn(err)
+				return err
+			}
 			log.Debugf("Received event %+v", event)
 			if err := jr.handleEvent(event); err != nil {
 				return err
@@ -92,7 +91,24 @@ func (jr *jobRunner) runJob() error {
 	}
 }
 
+func (jr *jobRunner) cleanup() {
+	go func() {
+		// read the events out of this channel
+		// to ensure no goroutines leak while
+		// trying to send on the channel
+		for _ = range jr.eventChan {
+			log.Debugf("Flushing event channel")
+		}
+	}()
+	log.Debugf("Removing event listener")
+	jr.eventListener.UnregisterListener(jr.eventChan)
+	log.Debugf("Event listener removed")
+}
+
 func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
+	if event == nil {
+		return nil
+	}
 	if event.ID != jr.currContainer.ID {
 		// this event is for a container we don't care about
 		return nil
@@ -119,7 +135,7 @@ func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 		return nil
 
 	default:
-		log.Warnf("Received unknown status %s for %d", event.Status, event.ID)
+		log.Warnf("Received unknown status %s for %s", event.Status, event.ID)
 		return nil
 	}
 }
@@ -132,8 +148,12 @@ func (jr *jobRunner) handleDieEvent() error {
 		return err
 	}
 	if exitCode != 0 {
-		log.Infof("Container %d exited with non-success code %s", jr.currContainer.ID, exitCode)
-		return nil
+		// TODO: this is the wrong use of an error
+		// a job exiting with an error is not an actual error,
+		// so shouldn't be handled as one
+		err := fmt.Errorf("Container %s exited with non-success code %d", jr.currContainer.ID, exitCode)
+		log.Info(err)
+		return err
 	}
 
 	image, err := jr.client.CommitContainer(docker.CommitContainerOptions{

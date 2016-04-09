@@ -13,18 +13,20 @@ type JobManager interface {
 }
 
 // NewJobManager returns a new JobManager
-func NewJobManager(jobStore JobStore, client *docker.Client) JobManager {
+func NewJobManager(jobStore JobStore, client *docker.Client, eventListner EventListener) JobManager {
 	return jobManager{
-		jobStore: jobStore,
-		client:   client,
-		newJobs:  make(chan Job, 100),
+		jobStore:     jobStore,
+		client:       client,
+		newJobs:      make(chan Job, 100),
+		eventListner: eventListner,
 	}
 }
 
 type jobManager struct {
-	jobStore JobStore
-	client   *docker.Client
-	newJobs  chan Job
+	jobStore     JobStore
+	client       *docker.Client
+	newJobs      chan Job
+	eventListner EventListener
 }
 
 func (jm jobManager) Start() {
@@ -33,7 +35,7 @@ func (jm jobManager) Start() {
 }
 
 func (jm jobManager) Stop() {
-
+	// TODO: implement
 }
 
 func (jm jobManager) NotifyNewJob(job Job) {

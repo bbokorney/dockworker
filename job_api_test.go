@@ -18,6 +18,53 @@ const (
 	retryCount = 10
 )
 
+type testCase struct {
+	requestBody  string
+	job          Job
+	resultStatus JobStatus
+}
+
+var testcases = []testCase{
+	testCase{
+		requestBody: `{
+  "image": "ubuntu:14.04",
+  "cmds": [
+    ["sh", "-c", "echo \"test\" > /test.txt"],
+    ["sleep", "1"],
+    ["cat", "/test.txt"]
+  ]
+}`,
+		job: Job{
+			ImageName: "ubuntu:14.04",
+			Cmds: []Cmd{
+				[]string{"sh", "-c", "echo \"test\" > /test.txt"},
+				[]string{"sleep", "1"},
+				[]string{"cat", "/test.txt"},
+			},
+		},
+		resultStatus: Successful,
+	},
+	testCase{
+		requestBody: `{
+  "image": "ubuntu:14.04",
+  "cmds": [
+    ["sh", "-c", "echo \"test\" > /test.txt"],
+    ["sleep", "1"],
+    ["cat", "/notthere.txt"]
+  ]
+}`,
+		job: Job{
+			ImageName: "ubuntu:14.04",
+			Cmds: []Cmd{
+				[]string{"sh", "-c", "echo \"test\" > /test.txt"},
+				[]string{"sleep", "1"},
+				[]string{"cat", "/notthere.txt"},
+			},
+		},
+		resultStatus: Failed,
+	},
+}
+
 func TestAPI(t *testing.T) {
 	wsContainer := initWSContainer()
 
@@ -26,16 +73,19 @@ func TestAPI(t *testing.T) {
 
 	jobURL := fmt.Sprintf("%s/%s", ts.URL, "jobs")
 
-	jobPOST := createJob(t, jobURL, exampleJobBody)
+	for i, tc := range testcases {
 
-	assert.Equal(t, "queued", string(jobPOST.Status), "Status should be queued")
-	assert.Equal(t, exampleJob.ImageName, jobPOST.ImageName, "Image name should match")
-	assert.Equal(t, exampleJob.Cmds, jobPOST.Cmds, "Commands should match")
+		jobPOST := createJob(t, jobURL, tc.requestBody)
 
-	// wait while the job completes
-	waitUntilDone(t, jobURL, jobPOST.ID)
-	jobGET := getJob(t, jobURL, jobPOST.ID)
-	assert.Equal(t, "successful", string(jobGET.Status), "Status should be successful")
+		assert.Equal(t, "queued", string(jobPOST.Status), "Case %d: Status should be queued", i)
+		assert.Equal(t, tc.job.ImageName, jobPOST.ImageName, "Case %d: Image name should match", i)
+		assert.Equal(t, tc.job.Cmds, jobPOST.Cmds, "Case %d: Commands should match", i)
+
+		// wait while the job completes
+		waitUntilDone(t, jobURL, jobPOST.ID)
+		jobGET := getJob(t, jobURL, jobPOST.ID)
+		assert.Equal(t, tc.resultStatus, jobGET.Status, "Case %d: Status should match", i)
+	}
 }
 
 func createJob(t *testing.T, jobURL string, body string) *Job {

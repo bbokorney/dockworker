@@ -144,6 +144,7 @@ func (jr *jobRunner) handleDieEvent() error {
 		log.Errorf("Error waiting for container: %s", err)
 		return err
 	}
+	jr.jobUpdater.AddCmdResult(jr.job, CmdResult(exitCode))
 	if exitCode != 0 {
 		log.Infof("Container %s exited with non-success code %d", jr.currContainer.ID, exitCode)
 		jr.jobUpdater.UpdateStatus(jr.job, JobStatusFailed)

@@ -41,6 +41,7 @@ var testcases = []testCase{
 				[]string{"sleep", "1"},
 				[]string{"cat", "/test.txt"},
 			},
+			Results: []CmdResult{0, 0, 0},
 		},
 		resultStatus: JobStatusSuccessful,
 	},
@@ -50,7 +51,8 @@ var testcases = []testCase{
   "cmds": [
     ["sh", "-c", "echo \"test\" > /test.txt"],
     ["sleep", "1"],
-    ["cat", "/notthere.txt"]
+    ["cat", "/notthere.txt"],
+    ["echo", "'I shouldn't run"]
   ]
 }`,
 		job: Job{
@@ -59,7 +61,9 @@ var testcases = []testCase{
 				[]string{"sh", "-c", "echo \"test\" > /test.txt"},
 				[]string{"sleep", "1"},
 				[]string{"cat", "/notthere.txt"},
+				[]string{"echo", "'I shouldn't run"},
 			},
+			Results: []CmdResult{0, 0, 1},
 		},
 		resultStatus: JobStatusFailed,
 	},
@@ -80,11 +84,13 @@ func TestAPI(t *testing.T) {
 		assert.Equal(t, JobStatusQueued, jobPOST.Status, "Case %d: Status should be queued", i)
 		assert.Equal(t, tc.job.ImageName, jobPOST.ImageName, "Case %d: Image name should match", i)
 		assert.Equal(t, tc.job.Cmds, jobPOST.Cmds, "Case %d: Commands should match", i)
+		assert.Equal(t, 0, len(jobPOST.Results), "Case %d: Should be no results initially", i)
 
 		// wait while the job completes
 		waitUntilDone(t, jobURL, jobPOST.ID)
 		jobGET := getJob(t, jobURL, jobPOST.ID)
 		assert.Equal(t, tc.resultStatus, jobGET.Status, "Case %d: Status should match", i)
+		assert.Equal(t, tc.job.Results, jobGET.Results, "Case %d: Results should match", i)
 	}
 }
 
@@ -133,22 +139,3 @@ func decodeBody(t *testing.T, respBody io.ReadCloser) *Job {
 
 	return job
 }
-
-var exampleJob = Job{
-	ImageName: "ubuntu:14.04",
-	Cmds: []Cmd{
-		[]string{"sh", "-c", "echo \"test\" > /test.txt"},
-		[]string{"sleep", "1"},
-		[]string{"cat", "/test.txt"},
-	},
-}
-
-const exampleJobBody = `{
-  "image": "ubuntu:14.04",
-  "cmds": [
-    ["sh", "-c", "echo \"test\" > /test.txt"],
-    ["sleep", "1"],
-    ["cat", "/test.txt"]
-  ]
-}
-`

@@ -1,0 +1,7 @@
+{
+  "image": "ubuntu:14.04",
+  "cmds": [
+    ["sh", "-c", "echo \"test\" > /test.txt"],
+    ["cat", "/test.txt"]
+  ]
+}

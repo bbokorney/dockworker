@@ -42,7 +42,7 @@ var testcases = []testCase{
 				[]string{"cat", "/test.txt"},
 			},
 		},
-		resultStatus: Successful,
+		resultStatus: JobStatusSuccessful,
 	},
 	testCase{
 		requestBody: `{
@@ -61,7 +61,7 @@ var testcases = []testCase{
 				[]string{"cat", "/notthere.txt"},
 			},
 		},
-		resultStatus: Failed,
+		resultStatus: JobStatusFailed,
 	},
 }
 
@@ -77,7 +77,7 @@ func TestAPI(t *testing.T) {
 
 		jobPOST := createJob(t, jobURL, tc.requestBody)
 
-		assert.Equal(t, "queued", string(jobPOST.Status), "Case %d: Status should be queued", i)
+		assert.Equal(t, JobStatusQueued, jobPOST.Status, "Case %d: Status should be queued", i)
 		assert.Equal(t, tc.job.ImageName, jobPOST.ImageName, "Case %d: Image name should match", i)
 		assert.Equal(t, tc.job.Cmds, jobPOST.Cmds, "Case %d: Commands should match", i)
 
@@ -110,7 +110,7 @@ func getJob(t *testing.T, jobURL string, jobID JobID) *Job {
 func waitUntilDone(t *testing.T, jobURL string, jobID JobID) {
 	for i := 0; i < retryCount; i++ {
 		jobGET := getJob(t, jobURL, jobID)
-		if jobGET.Status != "running" {
+		if jobGET.Status != "running" && jobGET.Status != "queued" {
 			return
 		}
 		time.Sleep(1 * time.Second)

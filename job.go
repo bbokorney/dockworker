@@ -23,12 +23,12 @@ type JobStatus string
 type JobID int
 
 const (
-	// Queued state indicates the job is queued waiting to be run
-	Queued JobStatus = "queued"
-	// Running state indicates the job is running
-	Running JobStatus = "running"
-	// Successful state indicates the job has completed successfully
-	Successful JobStatus = "successful"
-	// Failed state indicates the job has completed with a failure
-	Failed JobStatus = "failed"
+	// JobStatusQueued state indicates the job is queued waiting to be run
+	JobStatusQueued JobStatus = "queued"
+	// JobStatusRunning state indicates the job is running
+	JobStatusRunning JobStatus = "running"
+	// JobStatusSuccessful state indicates the job has completed successfully
+	JobStatusSuccessful JobStatus = "successful"
+	// JobStatusFailed state indicates the job has completed with a failure
+	JobStatusFailed JobStatus = "failed"
 )

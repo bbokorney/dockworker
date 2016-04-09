@@ -9,23 +9,13 @@ import (
 
 func (jm jobManager) jobWorker(job Job) {
 	log.Debugf("Running job %+v", job)
-	job.Status = Running
-	jm.updateStatus(job)
-	jr, err := newJobRunner(&job, jm.client, jm.eventListner)
+	jr, err := newJobRunner(&job, jm.client, jm.eventListner, jm.jobUpdater)
 	if err != nil {
 		log.Errorf("Error creating job runner: %s", err)
-		job.Status = Failed
-		jm.updateStatus(job)
+		jm.jobUpdater.UpdateStatus(&job, JobStatusFailed)
 		return
 	}
-	err = jr.runJob()
-	if err != nil {
-		job.Status = Failed
-		jm.updateStatus(job)
-		return
-	}
-	job.Status = Successful
-	jm.updateStatus(job)
+	jr.runJob()
 }
 
 type jobRunner struct {
@@ -37,13 +27,15 @@ type jobRunner struct {
 	prevImage     *docker.Image
 	currContainer *docker.Container
 	job           *Job
+	jobUpdater    JobUpdater
 }
 
-func newJobRunner(job *Job, client *docker.Client, eventListener EventListener) (*jobRunner, error) {
+func newJobRunner(job *Job, client *docker.Client, eventListener EventListener, jobUpdater JobUpdater) (*jobRunner, error) {
 	jr := &jobRunner{
 		client:        client,
 		job:           job,
 		eventListener: eventListener,
+		jobUpdater:    jobUpdater,
 	}
 
 	// register an event listener
@@ -61,6 +53,7 @@ func newJobRunner(job *Job, client *docker.Client, eventListener EventListener) 
 
 func (jr *jobRunner) runJob() error {
 	defer jr.cleanup()
+	jr.jobUpdater.UpdateStatus(jr.job, JobStatusRunning)
 
 	for {
 		select {
@@ -77,15 +70,15 @@ func (jr *jobRunner) runJob() error {
 			if err := jr.handleEvent(event); err != nil {
 				return err
 			}
-		case <-jr.cmdChan:
+		case _, ok := <-jr.cmdChan:
+			if !ok {
+				// no more commands to run
+				return nil
+			}
 			log.Debugf("Running next command")
-			done, err := jr.runNextCmd()
-			if err != nil {
+			if err := jr.runNextCmd(); err != nil {
 				log.Errorf("Error running command %s", err)
 				return err
-			}
-			if done {
-				return nil
 			}
 		}
 	}
@@ -123,6 +116,10 @@ func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 		log.Debugf("Received start status for %s", event.ID)
 		return nil
 
+	case "commit":
+		log.Debugf("Received commit status for %s", event.ID)
+		return nil
+
 	case "die":
 		log.Debugf("Received die status for %s", event.ID)
 		if err := jr.handleDieEvent(); err != nil {
@@ -148,12 +145,10 @@ func (jr *jobRunner) handleDieEvent() error {
 		return err
 	}
 	if exitCode != 0 {
-		// TODO: this is the wrong use of an error
-		// a job exiting with an error is not an actual error,
-		// so shouldn't be handled as one
-		err := fmt.Errorf("Container %s exited with non-success code %d", jr.currContainer.ID, exitCode)
-		log.Info(err)
-		return err
+		log.Infof("Container %s exited with non-success code %d", jr.currContainer.ID, exitCode)
+		jr.jobUpdater.UpdateStatus(jr.job, JobStatusFailed)
+		close(jr.cmdChan)
+		return nil
 	}
 
 	image, err := jr.client.CommitContainer(docker.CommitContainerOptions{
@@ -170,11 +165,13 @@ func (jr *jobRunner) handleDieEvent() error {
 	return nil
 }
 
-func (jr *jobRunner) runNextCmd() (done bool, err error) {
+func (jr *jobRunner) runNextCmd() error {
 	// TODO: handle jobs with no explicit commands
 	if jr.cmdIndex >= len(jr.job.Cmds) {
 		log.Infof("Done running job %d", jr.job.ID)
-		return true, nil
+		jr.jobUpdater.UpdateStatus(jr.job, JobStatusSuccessful)
+		close(jr.cmdChan)
+		return nil
 	}
 	config := docker.Config{
 		Cmd:   jr.job.Cmds[jr.cmdIndex],
@@ -188,7 +185,8 @@ func (jr *jobRunner) runNextCmd() (done bool, err error) {
 	container, err := jr.client.CreateContainer(createOpts)
 	if err != nil {
 		log.Errorf("Failed to create container: %s", err)
-		return false, err
+		close(jr.cmdChan)
+		return err
 	}
 
 	log.Debugf("%+v", container)
@@ -197,8 +195,9 @@ func (jr *jobRunner) runNextCmd() (done bool, err error) {
 	err = jr.client.StartContainer(container.ID, hostConfig)
 	if err != nil {
 		log.Errorf("Failed to start container: %s", err)
-		return false, err
+		close(jr.cmdChan)
+		return err
 	}
 	jr.currContainer = container
-	return false, nil
+	return nil
 }

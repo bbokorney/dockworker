@@ -13,12 +13,13 @@ type JobManager interface {
 }
 
 // NewJobManager returns a new JobManager
-func NewJobManager(jobStore JobStore, client *docker.Client, eventListner EventListener) JobManager {
+func NewJobManager(jobStore JobStore, client *docker.Client, eventListner EventListener, jobUpdater JobUpdater) JobManager {
 	return jobManager{
 		jobStore:     jobStore,
 		client:       client,
 		newJobs:      make(chan Job, 100),
 		eventListner: eventListner,
+		jobUpdater:   jobUpdater,
 	}
 }
 
@@ -27,6 +28,7 @@ type jobManager struct {
 	client       *docker.Client
 	newJobs      chan Job
 	eventListner EventListener
+	jobUpdater   JobUpdater
 }
 
 func (jm jobManager) Start() {
@@ -51,20 +53,5 @@ func (jm jobManager) manager() {
 			log.Debugf("Starting new job %d", job.ID)
 			go jm.jobWorker(job)
 		}
-	}
-}
-
-func (jm jobManager) updateStatus(job Job) {
-	// make sure nothing but the status gets updated was changed
-	j, err := jm.jobStore.Find(job.ID)
-	if err != nil {
-		log.Errorf("Error finding job %d: %s", job.ID, err)
-		return
-	}
-	j.Status = job.Status
-	err = jm.jobStore.Update(j)
-	if err != nil {
-		log.Errorf("Error updating job %d: %s", job.ID, err)
-		return
 	}
 }

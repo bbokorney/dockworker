@@ -8,9 +8,6 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
-// TODO:
-// * handle shutdown signal, stop workers
-
 func main() {
 	wsContainer := initWSContainer()
 	log.Info("Starting up...")
@@ -41,7 +38,8 @@ func initJobAPI() JobAPI {
 		log.Fatalf("Failed to start event listener: %s", err)
 	}
 	jobStore := NewJobStore()
-	jobManager := NewJobManager(jobStore, client, eventListener)
+	jobUpdater := NewJobUpdater(jobStore)
+	jobManager := NewJobManager(jobStore, client, eventListener, jobUpdater)
 	jobManager.Start()
 	jobService := NewJobService(jobStore, jobManager)
 	return NewJobAPI(jobService)

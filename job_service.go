@@ -22,7 +22,7 @@ type jobService struct {
 
 func (service jobService) Add(job Job) (Job, error) {
 	// TODO: validations
-	job.Status = Queued
+	job.Status = JobStatusQueued
 	job, err := service.jobStore.Add(job)
 	if err != nil {
 		return Job{}, err

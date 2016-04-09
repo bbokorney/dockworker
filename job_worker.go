@@ -186,6 +186,7 @@ func (jr *jobRunner) runNextCmd() error {
 	container, err := jr.client.CreateContainer(createOpts)
 	if err != nil {
 		log.Errorf("Failed to create container: %s", err)
+		jr.jobUpdater.UpdateStatus(jr.job, JobStatusError)
 		close(jr.cmdChan)
 		return err
 	}
@@ -196,6 +197,7 @@ func (jr *jobRunner) runNextCmd() error {
 	err = jr.client.StartContainer(container.ID, hostConfig)
 	if err != nil {
 		log.Errorf("Failed to start container: %s", err)
+		jr.jobUpdater.UpdateStatus(jr.job, JobStatusError)
 		close(jr.cmdChan)
 		return err
 	}

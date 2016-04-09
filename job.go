@@ -31,4 +31,6 @@ const (
 	JobStatusSuccessful JobStatus = "successful"
 	// JobStatusFailed state indicates the job has completed with a failure
 	JobStatusFailed JobStatus = "failed"
+	// JobStatusError state indicates the job could not be run properly
+	JobStatusError JobStatus = "error"
 )

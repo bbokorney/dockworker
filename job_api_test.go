@@ -67,6 +67,21 @@ var testcases = []testCase{
 		},
 		resultStatus: JobStatusFailed,
 	},
+	testCase{
+		requestBody: `{
+  "image": "ubuntu:14.04",
+  "cmds": [
+    ["notacommand"]
+  ]
+}`,
+		job: Job{
+			ImageName: "ubuntu:14.04",
+			Cmds: []Cmd{
+				[]string{"notacommand"},
+			},
+		},
+		resultStatus: JobStatusError,
+	},
 }
 
 func TestAPI(t *testing.T) {

@@ -20,7 +20,7 @@ type jobUpdater struct {
 }
 
 func (ju jobUpdater) UpdateStatus(job *Job, status JobStatus) error {
-	// make sure nothing but the status gets updated was changed
+	// make sure nothing but the status gets updated
 	j, err := ju.jobStore.Find(job.ID)
 	if err != nil {
 		log.Errorf("Error finding job during status update %d: %s", job.ID, err)

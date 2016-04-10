@@ -53,6 +53,8 @@ func newJobRunner(job *Job, client *docker.Client, eventListener EventListener, 
 
 func (jr *jobRunner) runJob() error {
 	defer jr.cleanup()
+	// TODO: explicitly handle job update statuses?
+	// maybe just fail the job?
 	jr.jobUpdater.UpdateStatus(jr.job, JobStatusRunning)
 
 	for {
@@ -185,18 +187,21 @@ func (jr *jobRunner) runNextCmd() error {
 
 	container, err := jr.client.CreateContainer(createOpts)
 	if err != nil {
-		log.Errorf("Failed to create container: %s", err)
+		log.Warnf("Failed to create container: %s", err)
 		jr.jobUpdater.UpdateStatus(jr.job, JobStatusError)
 		close(jr.cmdChan)
 		return err
 	}
+
+	log.Debugf("New container %+v", container)
+	jr.jobUpdater.AddContainer(jr.job, Container(container.ID))
 
 	log.Debugf("%+v", container)
 
 	hostConfig := &docker.HostConfig{}
 	err = jr.client.StartContainer(container.ID, hostConfig)
 	if err != nil {
-		log.Errorf("Failed to start container: %s", err)
+		log.Warnf("Failed to start container: %s", err)
 		jr.jobUpdater.UpdateStatus(jr.job, JobStatusError)
 		close(jr.cmdChan)
 		return err

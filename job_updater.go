@@ -6,6 +6,7 @@ import log "github.com/Sirupsen/logrus"
 type JobUpdater interface {
 	UpdateStatus(job *Job, status JobStatus) error
 	AddCmdResult(job *Job, result CmdResult) error
+	AddContainer(job *Job, container Container) error
 }
 
 // NewJobUpdater returns a new JobUpdater
@@ -48,6 +49,22 @@ func (ju jobUpdater) AddCmdResult(job *Job, result CmdResult) error {
 	err = ju.jobStore.Update(j)
 	if err != nil {
 		log.Errorf("Error updating job results %d: %s", job.ID, err)
+		return err
+	}
+	return nil
+}
+
+func (ju jobUpdater) AddContainer(job *Job, container Container) error {
+	j, err := ju.jobStore.Find(job.ID)
+	if err != nil {
+		log.Errorf("Error finding job during containers update %d: %s", job.ID, err)
+		return err
+	}
+	job.Containers = append(job.Containers, container)
+	j.Containers = append(j.Containers, container)
+	err = ju.jobStore.Update(j)
+	if err != nil {
+		log.Errorf("Error updating job containers %d: %s", job.ID, err)
 		return err
 	}
 	return nil

@@ -5,7 +5,11 @@ import "fmt"
 var (
 	// ErrJobNotFound indicates the specificed job
 	// could not be found
-	ErrJobNotFound = fmt.Errorf("Job not found")
+	ErrJobNotFound = fmt.Errorf("No job with that ID")
+
+	// ErrInvalidJobID indicates the job ID was
+	// specificed in an invalid format
+	ErrInvalidJobID = fmt.Errorf("Invalid job ID")
 )
 
 func errorResponse(msg string) errorMessage {

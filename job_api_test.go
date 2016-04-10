@@ -19,21 +19,23 @@ const (
 )
 
 type testCase struct {
-	requestBody  string
-	job          Job
-	resultStatus JobStatus
+	requestBody   string
+	job           Job
+	resultStatus  JobStatus
+	numContainers int
+	logs          string
 }
 
 var testcases = []testCase{
 	testCase{
 		requestBody: `{
-  "image": "ubuntu:14.04",
-  "cmds": [
-    ["sh", "-c", "echo \"test\" > /test.txt"],
-    ["sleep", "1"],
-    ["cat", "/test.txt"]
-  ]
-}`,
+	  "image": "ubuntu:14.04",
+	  "cmds": [
+	    ["sh", "-c", "echo \"test\" > /test.txt"],
+	    ["sleep", "1"],
+	    ["cat", "/test.txt"]
+	  ]
+	}`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
 			Cmds: []Cmd{
@@ -43,18 +45,20 @@ var testcases = []testCase{
 			},
 			Results: []CmdResult{0, 0, 0},
 		},
-		resultStatus: JobStatusSuccessful,
+		resultStatus:  JobStatusSuccessful,
+		numContainers: 3,
+		logs:          "test\n",
 	},
 	testCase{
 		requestBody: `{
-  "image": "ubuntu:14.04",
-  "cmds": [
-    ["sh", "-c", "echo \"test\" > /test.txt"],
-    ["sleep", "1"],
-    ["cat", "/notthere.txt"],
-    ["echo", "'I shouldn't run"]
-  ]
-}`,
+	  "image": "ubuntu:14.04",
+	  "cmds": [
+	    ["sh", "-c", "echo \"test\" > /test.txt"],
+	    ["sleep", "1"],
+	    ["cat", "/notthere.txt"],
+	    ["echo", "'I shouldn't run"]
+	  ]
+	}`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
 			Cmds: []Cmd{
@@ -65,22 +69,80 @@ var testcases = []testCase{
 			},
 			Results: []CmdResult{0, 0, 1},
 		},
-		resultStatus: JobStatusFailed,
+		resultStatus:  JobStatusFailed,
+		numContainers: 3,
+		logs:          "cat: /notthere.txt: No such file or directory\n",
 	},
 	testCase{
 		requestBody: `{
-  "image": "ubuntu:14.04",
-  "cmds": [
-    ["notacommand"]
-  ]
-}`,
+	  "image": "ubuntu:14.04",
+	  "cmds": [
+	    ["notacommand"]
+	  ]
+	}`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
 			Cmds: []Cmd{
 				[]string{"notacommand"},
 			},
 		},
-		resultStatus: JobStatusError,
+		resultStatus:  JobStatusError,
+		numContainers: 1,
+		logs:          "exec: \"notacommand\": executable file not found in $PATH\n",
+	},
+	testCase{
+		requestBody: `{
+  "image": "ubuntu:14.04",
+  "cmds": [
+    ["echo", "$TEST_VAR1"],
+		["echo", "$TEST_VAR2"]
+  ],
+	"env": {
+		"TEST_VAR1": "test value 1",
+		"TEST_VAR2": "test value 2"
+	}
+}`,
+		job: Job{
+			ImageName: "ubuntu:14.04",
+			Cmds: []Cmd{
+				[]string{"echo", "$TEST_VAR1"},
+				[]string{"echo", "$TEST_VAR2"},
+			},
+			Env: map[string]string{
+				"TEST_VAR1": "test value 1",
+				"TEST_VAR2": "test value 2",
+			},
+			Results: []CmdResult{0, 0},
+		},
+		resultStatus:  JobStatusSuccessful,
+		numContainers: 2,
+		logs:          "$TEST_VAR1\n$TEST_VAR2\n",
+	},
+	testCase{
+		requestBody: `{
+	  "image": "doesnotexist",
+	  "cmds": [
+	    ["echo", "$TEST_VAR1"],
+			["echo", "$TEST_VAR2"]
+	  ],
+		"env": {
+			"TEST_VAR1": "test value 1",
+			"TEST_VAR2": "test value 2"
+		}
+	}`,
+		job: Job{
+			ImageName: "doesnotexist",
+			Cmds: []Cmd{
+				[]string{"echo", "$TEST_VAR1"},
+				[]string{"echo", "$TEST_VAR2"},
+			},
+			Env: map[string]string{
+				"TEST_VAR1": "test value 1",
+				"TEST_VAR2": "test value 2",
+			},
+		},
+		resultStatus:  JobStatusError,
+		numContainers: 0,
 	},
 }
 
@@ -94,62 +156,88 @@ func TestAPI(t *testing.T) {
 
 	for i, tc := range testcases {
 
-		jobPOST := createJob(t, jobURL, tc.requestBody)
+		jobPOST := createJob(t, i, jobURL, tc.requestBody)
 
 		assert.Equal(t, JobStatusQueued, jobPOST.Status, "Case %d: Status should be queued", i)
 		assert.Equal(t, tc.job.ImageName, jobPOST.ImageName, "Case %d: Image name should match", i)
 		assert.Equal(t, tc.job.Cmds, jobPOST.Cmds, "Case %d: Commands should match", i)
+		assert.Equal(t, tc.job.Env, jobPOST.Env, "Case %d: Env should match", i)
 		assert.Equal(t, 0, len(jobPOST.Results), "Case %d: Should be no results initially", i)
+		assert.Equal(t, 0, len(jobPOST.Containers), "Case %d: Should be no containers initially", i)
 
 		// wait while the job completes
-		waitUntilDone(t, jobURL, jobPOST.ID)
-		jobGET := getJob(t, jobURL, jobPOST.ID)
+		waitUntilDone(t, i, jobURL, jobPOST.ID)
+		jobGET := getJob(t, i, jobURL, jobPOST.ID)
 		assert.Equal(t, tc.resultStatus, jobGET.Status, "Case %d: Status should match", i)
 		assert.Equal(t, tc.job.Results, jobGET.Results, "Case %d: Results should match", i)
+		assert.Equal(t, tc.numContainers, len(jobGET.Containers), "Case %d: Number of containers should match", i)
+
+		// check the logs of the job
+		logs := getLogs(t, i, jobURL, jobPOST.ID)
+		assert.Equal(t, tc.logs, logs, "Case %d: Logs should match", i)
 	}
 }
 
-func createJob(t *testing.T, jobURL string, body string) *Job {
+func createJob(t *testing.T, tcNum int, jobURL string, body string) *Job {
 	resp, err := http.Post(jobURL, "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Errorf("Error sending post request: %s", err)
 	}
-	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Status code should be 201")
-	return decodeBody(t, resp.Body)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode, "Case %d: Status code should be 201", tcNum)
+	return decodeBody(t, tcNum, resp.Body)
 }
 
-func getJob(t *testing.T, jobURL string, jobID JobID) *Job {
+func getJob(t *testing.T, tcNum int, jobURL string, jobID JobID) *Job {
 	resp, err := http.Get(fmt.Sprintf("%s/%d", jobURL, jobID))
 	if err != nil {
-		t.Errorf("Error sending get request: %s", err)
+		t.Errorf("Case %d: Error sending get request: %s", tcNum, err)
 	}
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code should be 200")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Case %d: Status code should be 200", tcNum)
 
-	return decodeBody(t, resp.Body)
+	return decodeBody(t, tcNum, resp.Body)
 }
 
-func waitUntilDone(t *testing.T, jobURL string, jobID JobID) {
+func getLogs(t *testing.T, tcNum int, jobURL string, jobID JobID) string {
+	resp, err := http.Get(fmt.Sprintf("%s/%d/logs", jobURL, jobID))
+	if err != nil {
+		t.Errorf("Case %d: Error sending get logs request: %s", tcNum, err)
+	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Case %d: Status code should be 200", tcNum)
+
+	return bodyToString(t, tcNum, resp.Body)
+}
+
+func waitUntilDone(t *testing.T, tcNum int, jobURL string, jobID JobID) {
 	for i := 0; i < retryCount; i++ {
-		jobGET := getJob(t, jobURL, jobID)
+		jobGET := getJob(t, tcNum, jobURL, jobID)
 		if jobGET.Status != "running" && jobGET.Status != "queued" {
 			return
 		}
 		time.Sleep(1 * time.Second)
 	}
-	t.Fatal("Waiting too long for job to complete ")
+	t.Fatalf("Case %d: Waiting too long for job to complete", tcNum)
 }
 
-func decodeBody(t *testing.T, respBody io.ReadCloser) *Job {
+func bodyToString(t *testing.T, tcNum int, respBody io.ReadCloser) string {
 	body, err := ioutil.ReadAll(respBody)
 	defer respBody.Close()
 	if err != nil {
-		t.Errorf("Error reading response body: %s", err)
+		t.Errorf("Case %d: Error converting response body to string: %s", tcNum, err)
+	}
+	return string(body)
+}
+
+func decodeBody(t *testing.T, tcNum int, respBody io.ReadCloser) *Job {
+	body, err := ioutil.ReadAll(respBody)
+	defer respBody.Close()
+	if err != nil {
+		t.Errorf("Case %d: Error reading response body: %s", tcNum, err)
 	}
 
 	job := &Job{}
 	err = json.Unmarshal(body, job)
 	if err != nil {
-		t.Errorf("Error decoding response body: %s", err)
+		t.Errorf("Case %d: Error decoding response body: %s", tcNum, err)
 	}
 
 	return job

@@ -2,12 +2,14 @@ package main
 
 // Job is a job
 type Job struct {
-	ID        JobID       `json:"id"`
-	ImageName string      `json:"image"`
-	Status    JobStatus   `json:"status"`
-	Cmds      []Cmd       `json:"cmds"`
-	Message   string      `json:"message"`
-	Results   []CmdResult `json:"results"`
+	ID         JobID             `json:"id"`
+	ImageName  string            `json:"image"`
+	Env        map[string]string `json:"env"`
+	Status     JobStatus         `json:"status"`
+	Cmds       []Cmd             `json:"cmds"`
+	Message    string            `json:"message"`
+	Results    []CmdResult       `json:"results"`
+	Containers []Container       `json:"containers"`
 }
 
 // CmdResult represents the result of running a command
@@ -21,6 +23,9 @@ type JobStatus string
 
 // JobID represents the ID of the Job
 type JobID int
+
+// Container represents the ID of the Job
+type Container string
 
 const (
 	// JobStatusQueued state indicates the job is queued waiting to be run

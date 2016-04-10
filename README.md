@@ -3,8 +3,9 @@ A worker queue API which runs jobs in Docker containers.
 
 ## Upcoming features
 
- * env vars
+ * ~~env vars~~
  * ~~container logs~~
+ * files from job container
  * persistence of jobs
  * graceful shutdowns and restarts
  * ~~container IDs which ran the job (for debugging)~~

@@ -179,6 +179,7 @@ func (jr *jobRunner) runNextCmd() error {
 	config := docker.Config{
 		Cmd:   jr.job.Cmds[jr.cmdIndex],
 		Image: jr.prevImage.ID,
+		Env:   convertEnv(jr.job.Env),
 	}
 
 	createOpts := docker.CreateContainerOptions{
@@ -208,4 +209,12 @@ func (jr *jobRunner) runNextCmd() error {
 	}
 	jr.currContainer = container
 	return nil
+}
+
+func convertEnv(env map[string]string) []string {
+	var converted []string
+	for k, v := range env {
+		converted = append(converted, fmt.Sprintf("%s=%s", k, v))
+	}
+	return converted
 }

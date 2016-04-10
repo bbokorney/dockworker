@@ -94,8 +94,8 @@ var testcases = []testCase{
 		requestBody: `{
   "image": "ubuntu:14.04",
   "cmds": [
-    ["echo", "$TEST_VAR1"],
-		["echo", "$TEST_VAR2"]
+    ["sh", "-c", "echo $TEST_VAR1"],
+		["sh", "-c", "echo $TEST_VAR2"]
   ],
 	"env": {
 		"TEST_VAR1": "test value 1",
@@ -105,8 +105,8 @@ var testcases = []testCase{
 		job: Job{
 			ImageName: "ubuntu:14.04",
 			Cmds: []Cmd{
-				[]string{"echo", "$TEST_VAR1"},
-				[]string{"echo", "$TEST_VAR2"},
+				[]string{"sh", "-c", "echo $TEST_VAR1"},
+				[]string{"sh", "-c", "echo $TEST_VAR2"},
 			},
 			Env: map[string]string{
 				"TEST_VAR1": "test value 1",
@@ -116,7 +116,7 @@ var testcases = []testCase{
 		},
 		resultStatus:  JobStatusSuccessful,
 		numContainers: 2,
-		logs:          "$TEST_VAR1\n$TEST_VAR2\n",
+		logs:          "test value 1\ntest value 2\n",
 	},
 	testCase{
 		requestBody: `{

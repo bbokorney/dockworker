@@ -1,4 +1,4 @@
-package main
+package dockworker
 
 import (
 	"encoding/json"
@@ -166,7 +166,7 @@ func (recorder *webhookRecorder) webhookHandler(w http.ResponseWriter, r *http.R
 }
 
 func TestAPI(t *testing.T) {
-	wsContainer := initWSContainer()
+	wsContainer := InitWSContainer()
 
 	ts := httptest.NewServer(wsContainer)
 	defer ts.Close()

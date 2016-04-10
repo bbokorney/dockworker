@@ -1,4 +1,4 @@
-package main
+package dockworker
 
 import (
 	"bytes"
@@ -29,7 +29,8 @@ func SendWebhook(job Job) {
 		return
 	}
 
-	if resp.StatusCode != http.StatusAccepted {
+	// check that we got some kind of successful response code
+	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
 		log.Errorf("Unexpected response from send webhook request for %d to %s: %s", job.ID, job.WebhookURL, err)
 		return
 	}

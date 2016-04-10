@@ -1,21 +1,13 @@
-package main
+package dockworker
 
 import (
-	"net/http"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/emicklei/go-restful"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/pborman/uuid"
 )
 
-func main() {
-	wsContainer := initWSContainer()
-	log.Info("Starting up...")
-	log.Fatal(http.ListenAndServe(":4321", wsContainer))
-}
-
-func initWSContainer() *restful.Container {
+func InitWSContainer() *restful.Container {
 	log.SetLevel(log.DebugLevel)
 	jobAPI := initJobAPI()
 	wsContainer := restful.NewContainer()

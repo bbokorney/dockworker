@@ -1,4 +1,4 @@
-package main
+package dockworker
 
 import log "github.com/Sirupsen/logrus"
 

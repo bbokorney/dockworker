@@ -1,4 +1,4 @@
-package main
+package dockworker
 
 // Job is a job
 type Job struct {

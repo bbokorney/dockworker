@@ -1,4 +1,4 @@
-package main
+package dockworker
 
 // JobService handles the jobs
 type JobService interface {

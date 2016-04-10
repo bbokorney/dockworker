@@ -16,6 +16,7 @@ func (jm jobManager) jobWorker(job Job) {
 		return
 	}
 	jr.runJob()
+	go SendWebhook(*jr.job)
 }
 
 type jobRunner struct {

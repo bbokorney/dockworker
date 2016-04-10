@@ -10,6 +10,7 @@ type Job struct {
 	Message    string            `json:"message"`
 	Results    []CmdResult       `json:"results"`
 	Containers []Container       `json:"containers"`
+	WebhookURL string            `json:"webhook_url"`
 }
 
 // CmdResult represents the result of running a command

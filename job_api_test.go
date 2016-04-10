@@ -34,7 +34,8 @@ var testcases = []testCase{
 	    ["sh", "-c", "echo \"test\" > /test.txt"],
 	    ["sleep", "1"],
 	    ["cat", "/test.txt"]
-	  ]
+	  ],
+		"webhook_url": "%s"
 	}`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
@@ -57,7 +58,8 @@ var testcases = []testCase{
 	    ["sleep", "1"],
 	    ["cat", "/notthere.txt"],
 	    ["echo", "'I shouldn't run"]
-	  ]
+	  ],
+		"webhook_url": "%s"
 	}`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
@@ -78,7 +80,8 @@ var testcases = []testCase{
 	  "image": "ubuntu:14.04",
 	  "cmds": [
 	    ["notacommand"]
-	  ]
+	  ],
+		"webhook_url": "%s"
 	}`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
@@ -100,7 +103,8 @@ var testcases = []testCase{
 	"env": {
 		"TEST_VAR1": "test value 1",
 		"TEST_VAR2": "test value 2"
-	}
+	},
+	"webhook_url": "%s"
 }`,
 		job: Job{
 			ImageName: "ubuntu:14.04",
@@ -128,7 +132,8 @@ var testcases = []testCase{
 		"env": {
 			"TEST_VAR1": "test value 1",
 			"TEST_VAR2": "test value 2"
-		}
+		},
+		"webhook_url": "%s"
 	}`,
 		job: Job{
 			ImageName: "doesnotexist",
@@ -146,17 +151,39 @@ var testcases = []testCase{
 	},
 }
 
+type webhookRecorder struct {
+	t     *testing.T
+	tcNum int
+}
+
+var webhookRequests []*Job
+
+func (recorder *webhookRecorder) webhookHandler(w http.ResponseWriter, r *http.Request) {
+	defer func() { recorder.tcNum++ }()
+	job := decodeBody(recorder.t, recorder.tcNum, r.Body)
+	webhookRequests = append(webhookRequests, job)
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func TestAPI(t *testing.T) {
 	wsContainer := initWSContainer()
 
 	ts := httptest.NewServer(wsContainer)
 	defer ts.Close()
 
+	whRecorder := webhookRecorder{
+		t:     t,
+		tcNum: 0,
+	}
+
+	webhookServer := httptest.NewServer(http.HandlerFunc(whRecorder.webhookHandler))
+	defer webhookServer.Close()
+
 	jobURL := fmt.Sprintf("%s/%s", ts.URL, "jobs")
 
 	for i, tc := range testcases {
 
-		jobPOST := createJob(t, i, jobURL, tc.requestBody)
+		jobPOST := createJob(t, i, jobURL, fmt.Sprintf(tc.requestBody, webhookServer.URL))
 
 		assert.Equal(t, JobStatusQueued, jobPOST.Status, "Case %d: Status should be queued", i)
 		assert.Equal(t, tc.job.ImageName, jobPOST.ImageName, "Case %d: Image name should match", i)
@@ -164,6 +191,7 @@ func TestAPI(t *testing.T) {
 		assert.Equal(t, tc.job.Env, jobPOST.Env, "Case %d: Env should match", i)
 		assert.Equal(t, 0, len(jobPOST.Results), "Case %d: Should be no results initially", i)
 		assert.Equal(t, 0, len(jobPOST.Containers), "Case %d: Should be no containers initially", i)
+		assert.Equal(t, webhookServer.URL, jobPOST.WebhookURL, "Case %d: Webhook URLs should match", i)
 
 		// wait while the job completes
 		waitUntilDone(t, i, jobURL, jobPOST.ID)
@@ -175,6 +203,13 @@ func TestAPI(t *testing.T) {
 		// check the logs of the job
 		logs := getLogs(t, i, jobURL, jobPOST.ID)
 		assert.Equal(t, tc.logs, logs, "Case %d: Logs should match", i)
+
+		// check the webhook results
+		assert.Condition(t, func() bool { return i < len(webhookRequests) }, "Case %d: Webhook requests length not great enough", i)
+		whJob := webhookRequests[i]
+		assert.Equal(t, tc.resultStatus, whJob.Status, "Case %d: Webhook status should match", i)
+		assert.Equal(t, tc.job.Results, whJob.Results, "Case %d: Webhook results should match", i)
+		assert.Equal(t, tc.numContainers, len(whJob.Containers), "Case %d: Webhook number of containers should match", i)
 	}
 }
 

@@ -57,6 +57,7 @@ func (el *eventListener) RegisterListener(listener chan *docker.APIEvents) {
 func (el *eventListener) UnregisterListener(listener chan *docker.APIEvents) {
 	el.lock.Lock()
 	if _, inMap := el.listeners[listener]; !inMap {
+		close(listener)
 		delete(el.listeners, listener)
 	}
 	defer el.lock.Unlock()

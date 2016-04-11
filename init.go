@@ -7,6 +7,7 @@ import (
 	"github.com/pborman/uuid"
 )
 
+// InitWSContainer sets up the program
 func InitWSContainer() *restful.Container {
 	log.SetLevel(log.DebugLevel)
 	jobAPI := initJobAPI()

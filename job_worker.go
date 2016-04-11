@@ -95,6 +95,7 @@ func (jr *jobRunner) cleanup() {
 		for _ = range jr.eventChan {
 			log.Debugf("Flushing event channel")
 		}
+		log.Debugf("Done flushing event channel")
 	}()
 	log.Debugf("Removing event listener")
 	jr.eventListener.UnregisterListener(jr.eventChan)

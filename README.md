@@ -1,10 +1,12 @@
 # dockworker
 A worker queue API which runs jobs in Docker containers.
 
-## Upcoming features
+## TODO
 
  * ~~env vars~~
  * ~~container logs~~
+ * hypermedia links for logs
+ * working dir for commands
  * stopping jobs
  * files from job container
  * persistence of jobs

@@ -16,6 +16,7 @@ type Client interface {
 	BaseURL() string
 	CreateJob(job dockworker.Job) (dockworker.Job, error)
 	GetJob(ID dockworker.JobID) (dockworker.Job, error)
+	GetLogs(ID dockworker.JobID) ([]byte, error)
 }
 
 // TODO: Move into dockworker package so the imports make more sense
@@ -61,6 +62,23 @@ func (c client) CreateJob(job dockworker.Job) (dockworker.Job, error) {
 		return dockworker.Job{}, err
 	}
 	return *createdJob, nil
+}
+
+func (c client) GetLogs(ID dockworker.JobID) ([]byte, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/jobs/%d/logs", c.baseURL, ID))
+	if err != nil {
+		return []byte{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return []byte{}, fmt.Errorf("Expected code %d but received %d", http.StatusCreated, resp.StatusCode)
+	}
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return []byte{}, err
+	}
+	return respBody, err
 }
 
 func (c client) GetJob(ID dockworker.JobID) (dockworker.Job, error) {

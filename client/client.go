@@ -16,6 +16,7 @@ type Client interface {
 	BaseURL() string
 	CreateJob(job dockworker.Job) (dockworker.Job, error)
 	GetJob(ID dockworker.JobID) (dockworker.Job, error)
+	StopJob(ID dockworker.JobID) error
 	GetLogs(ID dockworker.JobID) ([]byte, error)
 }
 
@@ -81,6 +82,18 @@ func (c client) GetLogs(ID dockworker.JobID) ([]byte, error) {
 	return respBody, err
 }
 
+func (c client) StopJob(ID dockworker.JobID) error {
+	resp, err := http.Post(fmt.Sprintf("%s/%d/stop", c.baseURL, ID), "application/json", nil)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("Expected code %d but received %d", http.StatusCreated, resp.StatusCode)
+	}
+	return nil
+}
+
 func (c client) GetJob(ID dockworker.JobID) (dockworker.Job, error) {
+	// TODO: implement
 	return dockworker.Job{}, nil
 }

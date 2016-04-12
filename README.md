@@ -5,9 +5,9 @@ A worker queue API which runs jobs in Docker containers.
 
  * ~~env vars~~
  * ~~container logs~~
- * hypermedia links for logs
+ * hypermedia links jobs
  * working dir for commands
- * stopping jobs
+ * ~~stopping jobs~~
  * files from job container
  * persistence of jobs
  * graceful shutdowns and restarts

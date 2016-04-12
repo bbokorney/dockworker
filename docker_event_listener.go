@@ -8,24 +8,27 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
-// EventListener wraps the underly Docker event listener
-type EventListener interface {
+// DockerEventListener wraps the underlying Docker event listener
+type DockerEventListener interface {
 	Start() error
 	Stop()
 	RegisterListener(listener chan *docker.APIEvents)
 	UnregisterListener(listener chan *docker.APIEvents)
 }
 
+// TODO: There is probably a way to combine these two event listeners
+// or maybe they're fine separate
+
 // NewEventListener returns a new EventListener
-func NewEventListener(client *docker.Client) EventListener {
-	return &eventListener{
+func NewEventListener(client *docker.Client) DockerEventListener {
+	return &dockerEventListener{
 		client:    client,
 		lock:      &sync.RWMutex{},
 		listeners: make(map[chan *docker.APIEvents]bool),
 	}
 }
 
-type eventListener struct {
+type dockerEventListener struct {
 	lock      *sync.RWMutex
 	listeners map[chan *docker.APIEvents]bool
 	client    *docker.Client
@@ -33,7 +36,7 @@ type eventListener struct {
 	eventChan chan *docker.APIEvents
 }
 
-func (el *eventListener) Start() error {
+func (el *dockerEventListener) Start() error {
 	// TODO: proper locking
 	err := el.setupEventChan()
 	if err != nil {
@@ -43,11 +46,11 @@ func (el *eventListener) Start() error {
 	return nil
 }
 
-func (el *eventListener) Stop() {
+func (el *dockerEventListener) Stop() {
 	// TODO: implement
 }
 
-func (el *eventListener) RegisterListener(listener chan *docker.APIEvents) {
+func (el *dockerEventListener) RegisterListener(listener chan *docker.APIEvents) {
 	el.lock.Lock()
 	defer el.lock.Unlock()
 	if _, inMap := el.listeners[listener]; !inMap {
@@ -55,15 +58,16 @@ func (el *eventListener) RegisterListener(listener chan *docker.APIEvents) {
 	}
 }
 
-func (el *eventListener) UnregisterListener(listener chan *docker.APIEvents) {
+func (el *dockerEventListener) UnregisterListener(listener chan *docker.APIEvents) {
 	el.lock.Lock()
-	if _, inMap := el.listeners[listener]; !inMap {
+	defer el.lock.Unlock()
+	if _, inMap := el.listeners[listener]; inMap {
+		// TODO: flush and close channel
 		delete(el.listeners, listener)
 	}
-	defer el.lock.Unlock()
 }
 
-func (el *eventListener) setupEventChan() error {
+func (el *dockerEventListener) setupEventChan() error {
 	el.eventChan = make(chan *docker.APIEvents)
 	log.Debug("Adding event listener channel")
 	if err := el.client.AddEventListener(el.eventChan); err != nil {
@@ -75,12 +79,12 @@ func (el *eventListener) setupEventChan() error {
 	return nil
 }
 
-func (el *eventListener) eventWorker() {
+func (el *dockerEventListener) eventWorker() {
 	for {
 		for event := range el.eventChan {
 			el.lock.RLock()
 			for listener := range el.listeners {
-				go sendToListener(listener, event)
+				go el.sendToListener(listener, event)
 			}
 			el.lock.RUnlock()
 		}
@@ -89,6 +93,6 @@ func (el *eventListener) eventWorker() {
 	}
 }
 
-func sendToListener(listener chan *docker.APIEvents, event *docker.APIEvents) {
+func (el *dockerEventListener) sendToListener(listener chan *docker.APIEvents, event *docker.APIEvents) {
 	listener <- event
 }

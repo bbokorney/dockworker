@@ -12,15 +12,18 @@ import (
 
 // JobAPI is a jobs api
 type JobAPI struct {
-	jobService JobService
-	logService LogService
+	jobService  JobService
+	logService  LogService
+	stopService StopService
 }
 
 // NewJobAPI creates a new JobAPI
-func NewJobAPI(jobService JobService, logService LogService) JobAPI {
+func NewJobAPI(jobService JobService, logService LogService,
+	stopService StopService) JobAPI {
 	return JobAPI{
-		jobService: jobService,
-		logService: logService,
+		jobService:  jobService,
+		logService:  logService,
+		stopService: stopService,
 	}
 }
 
@@ -45,6 +48,10 @@ func (api JobAPI) Register(container *restful.Container) {
 		Operation("logs").
 		Param(ws.PathParameter("id", "id of job").DataType("int")).
 		Produces("text/plain"))
+
+	ws.Route(ws.POST("/{id}/stop").To(api.stopJob).
+		Operation("stopJob").
+		Param(ws.PathParameter("id", "id of job").DataType("int")))
 
 	container.Add(ws)
 }
@@ -118,6 +125,33 @@ func (api JobAPI) logs(request *restful.Request, response *restful.Response) {
 		logAndRespondError(response, http.StatusInternalServerError, err)
 		return
 	}
+}
+
+func (api JobAPI) stopJob(request *restful.Request, response *restful.Response) {
+	id, err := strconv.Atoi(request.PathParameter("id"))
+	if err != nil {
+		logAndRespondError(response, http.StatusInternalServerError, ErrInvalidJobID)
+		return
+	}
+	jobID := JobID(id)
+
+	_, err = api.jobService.Find(jobID)
+	if err != nil {
+		switch err {
+		case ErrJobNotFound:
+			logAndRespondError(response, http.StatusNotFound, ErrJobNotFound)
+			return
+		default:
+			logAndRespondError(response, http.StatusInternalServerError, err)
+			return
+		}
+	}
+
+	if err := api.stopService.Stop(jobID); err != nil {
+		logAndRespondError(response, http.StatusInternalServerError, err)
+		return
+	}
+	response.WriteHeader(http.StatusAccepted)
 }
 
 func logAndRespondError(response *restful.Response, status int, err error) {

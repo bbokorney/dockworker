@@ -1,6 +1,10 @@
 package dockworker
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/emicklei/go-restful"
 	"github.com/fsouza/go-dockerclient"
@@ -32,13 +36,29 @@ func initJobAPI() JobAPI {
 	if err != nil {
 		log.Fatalf("Failed to start event listener: %s", err)
 	}
+	stopEventChan := make(chan JobID)
+	stopEventListener := NewStopEventListener(stopEventChan)
+	stopEventListener.Start()
 	jobStore := NewJobStore()
 	jobUpdater := NewJobUpdater(jobStore)
-	jobManager := NewJobManager(jobStore, client, eventListener, jobUpdater)
+	jobManager := NewJobManager(jobStore, client, eventListener, jobUpdater, stopEventListener)
 	jobManager.Start()
 	logService := NewLogService(jobStore, client)
 	jobService := NewJobService(jobStore, jobManager)
-	return NewJobAPI(jobService, logService)
+	stopService := NewStopService(stopEventChan)
+	// TODO: pass in everything which requires cleanup for a shutdown
+	signalHandler()
+	return NewJobAPI(jobService, logService, stopService)
+}
+
+func signalHandler() {
+	go func() {
+		signalChannel := make(chan os.Signal)
+		signal.Notify(signalChannel, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+		sig := <-signalChannel
+		log.Infof("Shutting down from signal %s", sig)
+		os.Exit(0)
+	}()
 }
 
 func globalLogging(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {

@@ -9,7 +9,7 @@ import (
 
 func (jm jobManager) jobWorker(job Job) {
 	log.Debugf("Running job %+v", job)
-	jr, err := newJobRunner(&job, jm.client, jm.eventListner, jm.jobUpdater)
+	jr, err := newJobRunner(&job, jm.client, jm.eventListner, jm.jobUpdater, jm.stopEventListener)
 	if err != nil {
 		log.Errorf("Error creating job runner: %s", err)
 		jm.jobUpdater.UpdateStatus(&job, JobStatusFailed)
@@ -20,28 +20,33 @@ func (jm jobManager) jobWorker(job Job) {
 }
 
 type jobRunner struct {
-	client        *docker.Client
-	eventListener EventListener
-	eventChan     chan *docker.APIEvents
-	cmdChan       chan interface{}
-	cmdIndex      int
-	prevImage     *docker.Image
-	currContainer *docker.Container
-	job           *Job
-	jobUpdater    JobUpdater
+	client            *docker.Client
+	eventListener     DockerEventListener
+	stopEventListener StopEventListener
+	eventChan         chan *docker.APIEvents
+	stopChan          chan JobID
+	cmdChan           chan interface{}
+	cmdIndex          int
+	prevImage         *docker.Image
+	currContainer     *docker.Container
+	job               *Job
+	jobUpdater        JobUpdater
 }
 
-func newJobRunner(job *Job, client *docker.Client, eventListener EventListener, jobUpdater JobUpdater) (*jobRunner, error) {
+func newJobRunner(job *Job, client *docker.Client, eventListener DockerEventListener, jobUpdater JobUpdater, stopEventListener StopEventListener) (*jobRunner, error) {
 	jr := &jobRunner{
-		client:        client,
-		job:           job,
-		eventListener: eventListener,
-		jobUpdater:    jobUpdater,
+		client:            client,
+		job:               job,
+		eventListener:     eventListener,
+		jobUpdater:        jobUpdater,
+		stopEventListener: stopEventListener,
 	}
 
 	// register an event listener
 	jr.eventChan = make(chan *docker.APIEvents)
 	jr.eventListener.RegisterListener(jr.eventChan)
+	jr.stopChan = make(chan JobID)
+	jr.stopEventListener.RegisterListener(jr.stopChan)
 	jr.cmdChan = make(chan interface{}, 2)
 	jr.cmdChan <- true
 	jr.cmdIndex = 0
@@ -87,8 +92,32 @@ func (jr *jobRunner) runJob() error {
 				log.Errorf("Error running command %s", err)
 				return err
 			}
+		case ID := <-jr.stopChan:
+			log.Debugf("Received stop event")
+			if stopped := jr.handleStopRequest(ID); stopped {
+				return nil
+			}
 		}
 	}
+}
+
+func (jr *jobRunner) handleStopRequest(jobID JobID) bool {
+	if jr.job.ID != jobID {
+		return false
+	}
+	log.Infof("Stoppping job %d", jr.job.ID)
+	if err := jr.client.StopContainer(jr.currContainer.ID, 10); err != nil {
+		log.Errorf("Error stoppping job %d: %s", jr.job.ID, err)
+	}
+	// try to get the exit code
+	exitCode, err := jr.client.WaitContainer(jr.currContainer.ID)
+	if err != nil {
+		log.Errorf("Error waiting for container after stopping job %d: %s", jr.job.ID, err)
+	} else {
+		jr.jobUpdater.AddCmdResult(jr.job, CmdResult(exitCode))
+	}
+	jr.jobUpdater.UpdateStatus(jr.job, JobStatusStopped)
+	return true
 }
 
 func (jr *jobRunner) pullImage() error {
@@ -113,13 +142,22 @@ func (jr *jobRunner) cleanup() {
 		// to ensure no goroutines leak while
 		// trying to send on the channel
 		for _ = range jr.eventChan {
-			log.Debugf("Flushing event channel")
+			log.Debugf("Flushing Docker event channel")
 		}
-		log.Debugf("Done flushing event channel")
+		log.Debugf("Done flushing Docker event channel")
 	}()
-	log.Debugf("Removing event listener")
-	jr.eventListener.UnregisterListener(jr.eventChan)
-	log.Debugf("Event listener removed")
+	go func() {
+		// read the events out of this channel
+		// to ensure no goroutines leak while
+		// trying to send on the channel
+		for _ = range jr.eventChan {
+			log.Debugf("Flushing stop event channel")
+		}
+		log.Debugf("Done flushing stop event channel")
+	}()
+	log.Debugf("Removing event stop listener")
+	jr.stopEventListener.UnregisterListener(jr.stopChan)
+	log.Debugf("Stop event listener removed")
 }
 
 func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {

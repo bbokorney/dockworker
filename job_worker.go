@@ -58,6 +58,10 @@ func (jr *jobRunner) runJob() error {
 	// maybe just fail the job?
 	jr.jobUpdater.UpdateStatus(jr.job, JobStatusRunning)
 
+	if err := jr.pullImage(); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		// TODO: think about how to filter these events
@@ -85,6 +89,22 @@ func (jr *jobRunner) runJob() error {
 			}
 		}
 	}
+}
+
+func (jr *jobRunner) pullImage() error {
+	repo, tag := docker.ParseRepositoryTag(jr.job.ImageName)
+	opts := docker.PullImageOptions{
+		Repository: repo,
+		Tag:        tag,
+	}
+	// buf := bytes.NewBuffer(make([]byte, 1024))
+	log.Debugf("Pulling image %d", jr.job.ImageName)
+	if err := jr.client.PullImage(opts, docker.AuthConfiguration{}); err != nil {
+		log.Errorf("Error pulling image %s: %s", jr.job.ImageName, err)
+		return err
+	}
+	log.Debugf("Done pulling image %d", jr.job.ImageName)
+	return nil
 }
 
 func (jr *jobRunner) cleanup() {

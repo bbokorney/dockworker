@@ -13,6 +13,7 @@ import (
 // Client represents a client which can be used to
 // interact with Dockworker
 type Client interface {
+	BaseURL() string
 	CreateJob(job dockworker.Job) (dockworker.Job, error)
 	GetJob(ID dockworker.JobID) (dockworker.Job, error)
 }
@@ -28,6 +29,10 @@ func NewClient(baseURL string) Client {
 
 type client struct {
 	baseURL string
+}
+
+func (c client) BaseURL() string {
+	return c.baseURL
 }
 
 func (c client) CreateJob(job dockworker.Job) (dockworker.Job, error) {

@@ -97,10 +97,10 @@ func (jr *jobRunner) pullImage() error {
 		Repository: repo,
 		Tag:        tag,
 	}
-	// buf := bytes.NewBuffer(make([]byte, 1024))
-	log.Debugf("Pulling image %d", jr.job.ImageName)
+	log.Debugf("Pulling image %s", jr.job.ImageName)
 	if err := jr.client.PullImage(opts, docker.AuthConfiguration{}); err != nil {
 		log.Errorf("Error pulling image %s: %s", jr.job.ImageName, err)
+		jr.jobUpdater.UpdateStatus(jr.job, JobStatusError)
 		return err
 	}
 	log.Debugf("Done pulling image %d", jr.job.ImageName)
@@ -124,6 +124,10 @@ func (jr *jobRunner) cleanup() {
 
 func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 	if event == nil {
+		return nil
+	}
+	if jr.currContainer == nil {
+		// nothing running yet
 		return nil
 	}
 	if event.ID != jr.currContainer.ID {

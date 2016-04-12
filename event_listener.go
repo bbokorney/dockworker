@@ -54,17 +54,16 @@ func (el *eventListener) RegisterListener(listener chan *docker.APIEvents) {
 		el.listeners[listener] = true
 	}
 }
+
 func (el *eventListener) UnregisterListener(listener chan *docker.APIEvents) {
 	el.lock.Lock()
 	if _, inMap := el.listeners[listener]; !inMap {
-		close(listener)
 		delete(el.listeners, listener)
 	}
 	defer el.lock.Unlock()
 }
 
 func (el *eventListener) setupEventChan() error {
-
 	el.eventChan = make(chan *docker.APIEvents)
 	log.Debug("Adding event listener channel")
 	if err := el.client.AddEventListener(el.eventChan); err != nil {

@@ -32,6 +32,8 @@ func TestAPI(t *testing.T) {
 		assert.Equal(t, tc.resultStatus, jobGET.Status, "Case %d: Status should match", i)
 		assert.Equal(t, tc.job.Results, jobGET.Results, "Case %d: Results should match", i)
 		assert.Equal(t, tc.numContainers, len(jobGET.Containers), "Case %d: Number of containers should match", i)
+		assert.Condition(t, func() bool { return jobGET.StartTime.Before(jobGET.EndTime) || jobGET.StartTime.Equal(jobGET.EndTime) },
+			"Case %d: Job start time (%s) should be before or equal to end time (%s)", i, jobGET.StartTime, jobGET.EndTime)
 
 		// check the logs of the job
 		logs := getLogs(t, i, jobURL, jobPOST.ID)

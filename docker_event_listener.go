@@ -53,18 +53,15 @@ func (el *dockerEventListener) Stop() {
 func (el *dockerEventListener) RegisterListener(listener chan *docker.APIEvents) {
 	el.lock.Lock()
 	defer el.lock.Unlock()
-	if _, inMap := el.listeners[listener]; !inMap {
-		el.listeners[listener] = true
-	}
+	el.listeners[listener] = true
 }
 
 func (el *dockerEventListener) UnregisterListener(listener chan *docker.APIEvents) {
 	el.lock.Lock()
 	defer el.lock.Unlock()
-	if _, inMap := el.listeners[listener]; inMap {
-		// TODO: flush and close channel
-		delete(el.listeners, listener)
-	}
+	log.Debugf("Num listeners before unregister: %d", len(el.listeners))
+	delete(el.listeners, listener)
+	log.Debugf("Num listeners after unregister: %d", len(el.listeners))
 }
 
 func (el *dockerEventListener) setupEventChan() error {

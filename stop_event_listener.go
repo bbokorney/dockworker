@@ -39,18 +39,13 @@ func (el *stopEventListener) Stop() {
 func (el *stopEventListener) RegisterListener(listener chan JobID) {
 	el.lock.Lock()
 	defer el.lock.Unlock()
-	if _, inMap := el.listeners[listener]; !inMap {
-		el.listeners[listener] = true
-	}
+	el.listeners[listener] = true
 }
 
 func (el *stopEventListener) UnregisterListener(listener chan JobID) {
 	el.lock.Lock()
 	defer el.lock.Unlock()
-	if _, inMap := el.listeners[listener]; inMap {
-		// TODO: flush and close channel
-		delete(el.listeners, listener)
-	}
+	delete(el.listeners, listener)
 }
 
 func (el *stopEventListener) eventWorker() {

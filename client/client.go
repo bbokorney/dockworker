@@ -83,7 +83,7 @@ func (c client) GetLogs(ID dockworker.JobID) ([]byte, error) {
 }
 
 func (c client) StopJob(ID dockworker.JobID) error {
-	resp, err := http.Post(fmt.Sprintf("%s/%d/stop", c.baseURL, ID), "application/json", nil)
+	resp, err := http.Post(fmt.Sprintf("%s/jobs/%d/stop", c.baseURL, ID), "application/json", nil)
 	if err != nil {
 		return err
 	}

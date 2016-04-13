@@ -1,10 +1,16 @@
 package dockworker
 
-import log "github.com/Sirupsen/logrus"
+import (
+	"time"
+
+	log "github.com/Sirupsen/logrus"
+)
 
 // JobUpdater handles updating jobs
 type JobUpdater interface {
 	UpdateStatus(job *Job, status JobStatus) error
+	UpdateStartTime(job *Job, startTime time.Time) error
+	UpdateEndTime(job *Job, endTime time.Time) error
 	AddCmdResult(job *Job, result CmdResult) error
 	AddContainer(job *Job, container Container) error
 }
@@ -18,6 +24,42 @@ func NewJobUpdater(jobStore JobStore) JobUpdater {
 
 type jobUpdater struct {
 	jobStore JobStore
+}
+
+func (ju jobUpdater) UpdateEndTime(job *Job, endTime time.Time) error {
+	// make sure nothing but the status gets updated
+	j, err := ju.jobStore.Find(job.ID)
+	if err != nil {
+		log.Errorf("Error finding job during end time update %d: %s", job.ID, err)
+		return err
+	}
+	// TODO: this is redundant, see if we can improve
+	job.EndTime = endTime
+	j.EndTime = endTime
+	err = ju.jobStore.Update(j)
+	if err != nil {
+		log.Errorf("Error updating job end time %d: %s", job.ID, err)
+		return err
+	}
+	return nil
+}
+
+func (ju jobUpdater) UpdateStartTime(job *Job, startTime time.Time) error {
+	// make sure nothing but the status gets updated
+	j, err := ju.jobStore.Find(job.ID)
+	if err != nil {
+		log.Errorf("Error finding job during start time update %d: %s", job.ID, err)
+		return err
+	}
+	// TODO: this is redundant, see if we can improve
+	job.StartTime = startTime
+	j.StartTime = startTime
+	err = ju.jobStore.Update(j)
+	if err != nil {
+		log.Errorf("Error updating job start time %d: %s", job.ID, err)
+		return err
+	}
+	return nil
 }
 
 func (ju jobUpdater) UpdateStatus(job *Job, status JobStatus) error {

@@ -1,5 +1,7 @@
 package dockworker
 
+import "time"
+
 // Job is a job
 type Job struct {
 	ID         JobID             `json:"id"`
@@ -11,6 +13,8 @@ type Job struct {
 	Results    []CmdResult       `json:"results"`
 	Containers []Container       `json:"containers"`
 	WebhookURL string            `json:"webhook_url"`
+	StartTime  time.Time         `json:"start_time"`
+	EndTime    time.Time         `json:"end_time"`
 }
 
 // CmdResult represents the result of running a command

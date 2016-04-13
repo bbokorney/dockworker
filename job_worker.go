@@ -2,6 +2,7 @@ package dockworker
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/fsouza/go-dockerclient"
@@ -94,16 +95,14 @@ func (jr *jobRunner) runJob() error {
 			}
 		case ID := <-jr.stopChan:
 			log.Debugf("Received stop event")
-			if stopped := jr.handleStopRequest(ID); stopped {
-				return nil
-			}
+			jr.handleStopRequest(ID)
 		}
 	}
 }
 
-func (jr *jobRunner) handleStopRequest(jobID JobID) bool {
+func (jr *jobRunner) handleStopRequest(jobID JobID) {
 	if jr.job.ID != jobID {
-		return false
+		return
 	}
 	log.Infof("Stoppping job %d", jr.job.ID)
 	if err := jr.client.StopContainer(jr.currContainer.ID, 10); err != nil {
@@ -116,8 +115,8 @@ func (jr *jobRunner) handleStopRequest(jobID JobID) bool {
 	} else {
 		jr.jobUpdater.AddCmdResult(jr.job, CmdResult(exitCode))
 	}
+	log.Debugf("Setting status stopped for job %d", jobID)
 	jr.jobUpdater.UpdateStatus(jr.job, JobStatusStopped)
-	return true
 }
 
 func (jr *jobRunner) pullImage() error {
@@ -180,6 +179,7 @@ func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 
 	case "start":
 		log.Debugf("Received start status for %s", event.ID)
+		jr.handleStartEvent(event)
 		return nil
 
 	case "commit":
@@ -188,7 +188,7 @@ func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 
 	case "die":
 		log.Debugf("Received die status for %s", event.ID)
-		if err := jr.handleDieEvent(); err != nil {
+		if err := jr.handleDieEvent(event); err != nil {
 			return err
 		}
 		return nil
@@ -203,8 +203,13 @@ func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 	}
 }
 
-func (jr *jobRunner) handleDieEvent() error {
+func (jr *jobRunner) handleStartEvent(event *docker.APIEvents) {
+	jr.jobUpdater.UpdateStartTime(jr.job, time.Unix(event.Time, 0))
+}
+
+func (jr *jobRunner) handleDieEvent(event *docker.APIEvents) error {
 	// the container died, let's see what it returned
+	jr.jobUpdater.UpdateEndTime(jr.job, time.Unix(event.Time, 0))
 	exitCode, err := jr.client.WaitContainer(jr.currContainer.ID)
 	if err != nil {
 		log.Errorf("Error waiting for container: %s", err)
@@ -213,7 +218,12 @@ func (jr *jobRunner) handleDieEvent() error {
 	jr.jobUpdater.AddCmdResult(jr.job, CmdResult(exitCode))
 	if exitCode != 0 {
 		log.Infof("Container %s exited with non-success code %d", jr.currContainer.ID, exitCode)
-		jr.jobUpdater.UpdateStatus(jr.job, JobStatusFailed)
+		if jr.job.Status != JobStatusStopped {
+			// non-zero exit codes only apply to jobs which
+			// haven't been forcibly stopped
+			log.Debugf("Setting status failed for job %d", jr.job.ID)
+			jr.jobUpdater.UpdateStatus(jr.job, JobStatusFailed)
+		}
 		close(jr.cmdChan)
 		return nil
 	}

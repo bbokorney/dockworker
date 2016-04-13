@@ -141,18 +141,20 @@ func (jr *jobRunner) cleanup() {
 		// to ensure no goroutines leak while
 		// trying to send on the channel
 		for _ = range jr.eventChan {
-			log.Debugf("Flushing Docker event channel")
+			// TODO: this never stops flushing...
+			// log.Debugf("Flushing Docker event channel")
 		}
-		log.Debugf("Done flushing Docker event channel")
+		// log.Debugf("Done flushing Docker event channel")
 	}()
 	go func() {
 		// read the events out of this channel
 		// to ensure no goroutines leak while
 		// trying to send on the channel
 		for _ = range jr.eventChan {
-			log.Debugf("Flushing stop event channel")
+			// TODO: this never stops flushing...
+			// log.Debugf("Flushing stop event channel")
 		}
-		log.Debugf("Done flushing stop event channel")
+		// log.Debugf("Done flushing stop event channel")
 	}()
 	log.Debugf("Removing event stop listener")
 	jr.stopEventListener.UnregisterListener(jr.stopChan)

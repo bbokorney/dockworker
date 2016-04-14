@@ -64,10 +64,7 @@ func (jr *jobRunner) runJob() error {
 	// maybe just fail the job?
 	jr.jobUpdater.UpdateStatus(jr.job, JobStatusRunning)
 
-	if err := jr.pullImage(); err != nil {
-		return err
-	}
-
+	jr.pullImage()
 	for {
 		select {
 		// TODO: think about how to filter these events

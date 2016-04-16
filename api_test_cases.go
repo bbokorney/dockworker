@@ -5,6 +5,7 @@ type testCase struct {
 	job           Job
 	resultStatus  JobStatus
 	numContainers int
+	numImages     int
 	logs          string
 }
 
@@ -30,6 +31,7 @@ var apiTestCases = []testCase{
 		},
 		resultStatus:  JobStatusSuccessful,
 		numContainers: 3,
+		numImages:     3,
 		logs:          "test\n",
 	},
 	testCase{
@@ -55,6 +57,7 @@ var apiTestCases = []testCase{
 		},
 		resultStatus:  JobStatusFailed,
 		numContainers: 3,
+		numImages:     2,
 		logs:          "cat: /notthere.txt: No such file or directory\n",
 	},
 	testCase{
@@ -73,7 +76,8 @@ var apiTestCases = []testCase{
 		},
 		resultStatus:  JobStatusError,
 		numContainers: 1,
-		logs:          "exec: \"notacommand\": executable file not found in $PATH\n",
+		numImages:     0,
+		logs:          "",
 	},
 	testCase{
 		requestBody: `{
@@ -102,6 +106,7 @@ var apiTestCases = []testCase{
 		},
 		resultStatus:  JobStatusSuccessful,
 		numContainers: 2,
+		numImages:     2,
 		logs:          "test value 1\ntest value 2\n",
 	},
 	testCase{
@@ -130,5 +135,6 @@ var apiTestCases = []testCase{
 		},
 		resultStatus:  JobStatusError,
 		numContainers: 0,
+		numImages:     0,
 	},
 }

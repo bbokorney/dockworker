@@ -13,6 +13,7 @@ type JobUpdater interface {
 	UpdateEndTime(job *Job, endTime time.Time) error
 	AddCmdResult(job *Job, result CmdResult) error
 	AddContainer(job *Job, container Container) error
+	AddImage(job *Job, image ImageName) error
 }
 
 // NewJobUpdater returns a new JobUpdater
@@ -91,6 +92,22 @@ func (ju jobUpdater) AddCmdResult(job *Job, result CmdResult) error {
 	err = ju.jobStore.Update(j)
 	if err != nil {
 		log.Errorf("Error updating job results %d: %s", job.ID, err)
+		return err
+	}
+	return nil
+}
+
+func (ju jobUpdater) AddImage(job *Job, image ImageName) error {
+	j, err := ju.jobStore.Find(job.ID)
+	if err != nil {
+		log.Errorf("Error finding job during images update %d: %s", job.ID, err)
+		return err
+	}
+	job.Images = append(job.Images, image)
+	j.Images = append(j.Images, image)
+	err = ju.jobStore.Update(j)
+	if err != nil {
+		log.Errorf("Error updating job images %d: %s", job.ID, err)
 		return err
 	}
 	return nil

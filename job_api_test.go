@@ -24,6 +24,7 @@ func TestAPI(t *testing.T) {
 		assert.Equal(t, tc.job.Env, jobPOST.Env, "Case %d: Env should match", i)
 		assert.Equal(t, 0, len(jobPOST.Results), "Case %d: Should be no results initially", i)
 		assert.Equal(t, 0, len(jobPOST.Containers), "Case %d: Should be no containers initially", i)
+		assert.Equal(t, 0, len(jobPOST.Images), "Case %d: Should be no images initially", i)
 		assert.Equal(t, webhookServer.URL, jobPOST.WebhookURL, "Case %d: Webhook URLs should match", i)
 
 		// wait while the job completes
@@ -32,6 +33,7 @@ func TestAPI(t *testing.T) {
 		assert.Equal(t, tc.resultStatus, jobGET.Status, "Case %d: Status should match", i)
 		assert.Equal(t, tc.job.Results, jobGET.Results, "Case %d: Results should match", i)
 		assert.Equal(t, tc.numContainers, len(jobGET.Containers), "Case %d: Number of containers should match", i)
+		assert.Equal(t, tc.numImages, len(jobGET.Images), "Case %d: Number of images should match", i)
 		assert.Condition(t, func() bool { return jobGET.StartTime.Before(jobGET.EndTime) || jobGET.StartTime.Equal(jobGET.EndTime) },
 			"Case %d: Job start time (%s) should be before or equal to end time (%s)", i, jobGET.StartTime, jobGET.EndTime)
 
@@ -45,5 +47,6 @@ func TestAPI(t *testing.T) {
 		assert.Equal(t, tc.resultStatus, whJob.Status, "Case %d: Webhook status should match", i)
 		assert.Equal(t, tc.job.Results, whJob.Results, "Case %d: Webhook results should match", i)
 		assert.Equal(t, tc.numContainers, len(whJob.Containers), "Case %d: Webhook number of containers should match", i)
+		assert.Equal(t, tc.numImages, len(whJob.Images), "Case %d: Webhook number of images should match", i)
 	}
 }

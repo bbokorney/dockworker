@@ -16,7 +16,7 @@ func TestStop(t *testing.T) {
 		jobPOST := createJob(t, i, jobURL, fmt.Sprintf(tc.requestBody, webhookServer.URL))
 		waitUntilRunning(t, i, jobURL, jobPOST.ID)
 		// let the job run for a bit
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 4)
 		stopJob(t, i, jobURL, jobPOST.ID)
 		waitUntilDone(t, i, jobURL, jobPOST.ID)
 
@@ -24,6 +24,7 @@ func TestStop(t *testing.T) {
 		assert.Equal(t, tc.resultStatus, jobGET.Status, "Case %d: Status should match", i)
 		assert.Equal(t, tc.job.Results, jobGET.Results, "Case %d: Results should match", i)
 		assert.Equal(t, tc.numContainers, len(jobGET.Containers), "Case %d: Number of containers should match", i)
+		assert.Equal(t, tc.numImages, len(jobGET.Images), "Case %d: Number of images should match", i)
 
 		// check the logs of the job
 		logs := getLogs(t, i, jobURL, jobPOST.ID)
@@ -34,6 +35,7 @@ func TestStop(t *testing.T) {
 		assert.Equal(t, tc.resultStatus, whJob.Status, "Case %d: Webhook status should match", i)
 		assert.Equal(t, tc.job.Results, whJob.Results, "Case %d: Webhook results should match", i)
 		assert.Equal(t, tc.numContainers, len(whJob.Containers), "Case %d: Webhook number of containers should match", i)
+		assert.Equal(t, tc.numImages, len(whJob.Images), "Case %d: Webhook number of images should match", i)
 	}
 
 	defer webhookServer.Close()
@@ -56,10 +58,11 @@ var stopTestCases = []testCase{
 				[]string{"echo", "Sleeping..."},
 				[]string{"sleep", "30"},
 			},
-			Results: []CmdResult{0, 1},
+			Results: []CmdResult{0, 137},
 		},
 		resultStatus:  JobStatusStopped,
 		numContainers: 2,
-		logs:          "Sleeping...\nsleep: cannot read realtime clock: Operation not permitted\n",
+		numImages:     1,
+		logs:          "Sleeping...\n",
 	},
 }

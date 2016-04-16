@@ -102,15 +102,8 @@ func (jr *jobRunner) handleStopRequest(jobID JobID) {
 		return
 	}
 	log.Infof("Stoppping job %d", jr.job.ID)
-	if err := jr.client.StopContainer(jr.currContainer.ID, 10); err != nil {
+	if err := jr.client.StopContainer(jr.currContainer.ID, 5); err != nil {
 		log.Errorf("Error stoppping job %d: %s", jr.job.ID, err)
-	}
-	// try to get the exit code
-	exitCode, err := jr.client.WaitContainer(jr.currContainer.ID)
-	if err != nil {
-		log.Errorf("Error waiting for container after stopping job %d: %s", jr.job.ID, err)
-	} else {
-		jr.jobUpdater.AddCmdResult(jr.job, CmdResult(exitCode))
 	}
 	log.Debugf("Setting status stopped for job %d", jobID)
 	jr.jobUpdater.UpdateStatus(jr.job, JobStatusStopped)
@@ -192,6 +185,10 @@ func (jr *jobRunner) handleEvent(event *docker.APIEvents) error {
 		}
 		return nil
 
+	case "stop":
+		log.Debugf("Received stop status for %s", event.ID)
+		return nil
+
 	case "":
 		log.Debugf("Received empty status for %s", event.ID)
 		return nil
@@ -234,7 +231,8 @@ func (jr *jobRunner) handleDieEvent(event *docker.APIEvents) error {
 		log.Errorf("Error committing image: %s", err)
 		return err
 	}
-	log.Debugf("%+v", image)
+	log.Debugf("Saving image %s", image.ID)
+	jr.jobUpdater.AddImage(jr.job, ImageName(image.ID))
 	jr.prevImage = image
 	jr.cmdIndex++
 	jr.cmdChan <- true

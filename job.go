@@ -12,6 +12,7 @@ type Job struct {
 	Message    string            `json:"message"`
 	Results    []CmdResult       `json:"results"`
 	Containers []Container       `json:"containers"`
+	Images     []ImageName       `json:"images"`
 	WebhookURL string            `json:"webhook_url"`
 	StartTime  time.Time         `json:"start_time"`
 	EndTime    time.Time         `json:"end_time"`
@@ -31,6 +32,9 @@ type JobID int
 
 // Container represents the ID of the Job
 type Container string
+
+// ImageName represents the ID of a Docker image
+type ImageName string
 
 const (
 	// JobStatusQueued state indicates the job is queued waiting to be run
